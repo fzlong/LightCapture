@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+  <title>LightCapture · 轻录</title>
+  <desc>A cyan screen with a coral recording light on a dark rounded tile.</desc>
+  <rect x="3" y="3" width="58" height="58" rx="16" fill="#11232E"/>
+  <rect x="11" y="13" width="42" height="31" rx="7" fill="none" stroke="#63E6DF" stroke-width="4"/>
+  <path d="M25 45v7m-7 0h22" fill="none" stroke="#63E6DF" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="47" cy="45" r="10" fill="#FF6474" stroke="#11232E" stroke-width="4"/>
+</svg>

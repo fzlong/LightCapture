@@ -1,0 +1,22 @@
+name: Build and software regression
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Build application
+        run: dotnet build src/LightCapture.csproj -c Release
+      - name: FPS pipe and parser regression
+        run: dotnet run --project tests/FpsRegression.csproj -c Release

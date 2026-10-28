@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyTitle>LightCapture · 轻录</AssemblyTitle>
+    <Description>GPU recording and RAM instant replay</Description>
+    <Version>0.3.1</Version>
+    <PackageLicenseExpression>GPL-2.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/fzlong/LightCapture</RepositoryUrl>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\lightcapture.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\lightcapture.ico" LogicalName="LightCapture.AppIcon" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>

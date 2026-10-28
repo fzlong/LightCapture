@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\src\GifRecorder.cs" Link="GifRecorder.cs"/>
+    <Compile Include="..\src\RegionSelector.cs" Link="RegionSelector.cs"/>
+    <Compile Include="..\src\Settings.cs" Link="Settings.cs"/>
+    <Compile Include="..\src\Native.cs" Link="Native.cs"/>
+  </ItemGroup>
+</Project>
