@@ -20,3 +20,7 @@ jobs:
         run: dotnet build src/LightCapture.csproj -c Release
       - name: FPS pipe and parser regression
         run: dotnet run --project tests/FpsRegression.csproj -c Release
+      - name: Hotkey and configuration regression
+        run: dotnet run --project hotkey-tests/HotkeyRegression.csproj -c Release
+      - name: Build GIF integration harness
+        run: dotnet build gif-tests/GifRegression.csproj -c Release

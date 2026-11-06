@@ -1,61 +1,107 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 namespace LightCapture;
 
-sealed record GifResult(string File,int Colors,double Quality,long Bytes);
+sealed record GifResult(string File,int Colors,long Bytes,string Encoder,double EncodingSeconds);
 
 static class GifExporter
 {
     internal static string Normalize(Settings s)=>$"fps={s.GifFps},scale=w='min({s.GifMaxSide},iw)':h='min({s.GifMaxSide},ih)':force_original_aspect_ratio=decrease:flags=lanczos";
-    public static async Task<GifResult> Export(string input,string output,Settings settings)
+    public static async Task<GifResult> Export(string input,string output,Settings settings,Action<string>? progress=null)
     {
-        string dir=Path.Combine(Path.GetDirectoryName(input)!,"palettes-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(dir);
+        var clock=Stopwatch.StartNew();
         string temp=output+".partial.gif";
         try
         {
-            string small=Path.Combine(dir,"128.gif");
-            await Encode(input,small,128,settings,dir).ConfigureAwait(false);
-            double quality=await Score(input,small,settings).ConfigureAwait(false);
-            int colors=128;
-            if(quality<.975 || double.IsNaN(quality))
+            string? gifski;
+            try {gifski=Tools.Find("gifski.exe");} catch(FileNotFoundException) {gifski=null;}
+            string encoder;
+            if(gifski!=null)
             {
-                string full=Path.Combine(dir,"256.gif");
-                await Encode(input,full,256,settings,dir).ConfigureAwait(false);
-                small=full; colors=256;
+                encoder="gifski";progress?.Invoke("GIF 正在快速保色压制…");
+                await EncodeGifski(input,temp,settings,gifski).ConfigureAwait(false);
             }
-            File.Copy(small,temp,true); File.Move(temp,output,false);
-            return new(output,colors,quality,new FileInfo(output).Length);
+            else
+            {
+                encoder="FFmpeg";progress?.Invoke("GIF 保色编码器未安装，正在使用 FFmpeg 兼容压制…");
+                await EncodeCompatible(input,temp,settings).ConfigureAwait(false);
+            }
+            if(!File.Exists(temp)||new FileInfo(temp).Length<14) throw new IOException("GIF 编码没有产生有效文件。");
+            File.Move(temp,output,false);
+            return new(output,256,new FileInfo(output).Length,encoder,clock.Elapsed.TotalSeconds);
         }
         finally
         {
             if(File.Exists(temp)) File.Delete(temp);
-            // dir is a freshly-created private directory underneath this recording's cache.
-            try { Directory.Delete(dir,true); } catch(IOException) { }
         }
     }
-    static async Task Encode(string input,string output,int colors,Settings settings,string dir)
+    static async Task EncodeCompatible(string input,string output,Settings settings)
     {
-        var palette=Path.Combine(dir,$"palette-{colors}.png");
-        // Two passes keep memory bounded; a split + palettegen graph would buffer the whole clip.
-        await Tools.Run(Tools.Find("ffmpeg.exe"),"-hide_banner","-loglevel","error","-y","-threads","2","-i",input,"-vf",Normalize(settings)+$",palettegen=max_colors={colors}:reserve_transparent=1:stats_mode=full","-frames:v","1","-update","1",palette).ConfigureAwait(false);
-        string graph=$"[0:v]{Normalize(settings)}[v];[v][1:v]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle[out]";
-        await Tools.Run(Tools.Find("ffmpeg.exe"),"-hide_banner","-loglevel","error","-y","-threads","2","-i",input,"-i",palette,"-filter_complex_threads","2","-filter_complex",graph,"-map","[out]","-an","-gifflags","+offsetting+transdiff","-loop","0",output).ConfigureAwait(false);
+        string dir=Path.Combine(Path.GetDirectoryName(input)!,"palettes-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
+        try
+        {
+            var palette=Path.Combine(dir,"palette.png");
+            // A fixed 256-color two-pass fallback avoids the former 128-color attempt, full SSIM
+            // pass and second encode. Do not buffer an entire clip in a split/palettegen graph.
+            await Tools.Run(Tools.Find("ffmpeg.exe"),"-hide_banner","-loglevel","error","-y","-threads","4","-filter_threads","4","-i",input,"-vf",Normalize(settings)+",palettegen=max_colors=256:reserve_transparent=1:stats_mode=full","-frames:v","1","-update","1",palette).ConfigureAwait(false);
+            string graph=$"[0:v]{Normalize(settings)}[v];[v][1:v]paletteuse=dither=sierra2_4a:diff_mode=rectangle[out]";
+            await Tools.Run(Tools.Find("ffmpeg.exe"),"-hide_banner","-loglevel","error","-y","-threads","4","-i",input,"-i",palette,"-filter_complex_threads","4","-filter_complex",graph,"-map","[out]","-an","-gifflags","+offsetting+transdiff","-loop","0",output).ConfigureAwait(false);
+        }
+        finally {try {Directory.Delete(dir,true);} catch(IOException) { }}
     }
-    static async Task<double> Score(string input,string gif,Settings settings)
+    internal static string GifskiFilter(Settings settings)=>Normalize(settings)+":out_color_matrix=bt709:out_range=tv,format=yuv444p";
+    internal static string[] GifskiArguments(string output,int width,int height,Settings settings)=>
+        ["--fast","--fps",settings.GifFps.ToString(CultureInfo.InvariantCulture),"--quality",Math.Clamp(settings.GifQuality,50,100).ToString(CultureInfo.InvariantCulture),
+         "--width",width.ToString(CultureInfo.InvariantCulture),"--height",height.ToString(CultureInfo.InvariantCulture),"--repeat","0","--quiet","--y4m-color-override","bt709","--output",output,"-"];
+    static async Task EncodeGifski(string input,string output,Settings settings,string gifski)
     {
-        // GIF delays are centiseconds. Align by decoded frame index so rounded GIF
-        // timestamps do not compare one moving frame against its neighbour.
-        string graph=$"[0:v]{Normalize(settings)},settb=expr=1/{settings.GifFps},setpts=N,format=gbrp[a];[1:v]settb=expr=1/{settings.GifFps},setpts=N,format=gbrp[b];[a][b]ssim";
-        using var process=Process.Start(Tools.Info(Tools.Find("ffmpeg.exe"),"-hide_banner","-threads","2","-i",input,"-ignore_loop","1","-i",gif,"-filter_complex_threads","2","-lavfi",graph,"-an","-f","null","NUL"))!;
-        var error=process.StandardError.ReadToEndAsync(); var output=process.StandardOutput.ReadToEndAsync();
-        using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        try { await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false); }
-        catch { try { process.Kill(true); } catch { } throw; }
-        await output.ConfigureAwait(false);
-        var match=Regex.Matches(await error.ConfigureAwait(false),@"All:([0-9.]+)").LastOrDefault();
-        return process.ExitCode==0 && match!=null && double.TryParse(match.Groups[1].Value,CultureInfo.InvariantCulture,out var score)?score:double.NaN;
+        using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(180,settings.GifMaxSeconds*4)));
+        using var decoder=Process.Start(Tools.Info(Tools.Find("ffmpeg.exe"),"-hide_banner","-loglevel","error","-threads","4","-filter_threads","4","-i",input,"-vf",GifskiFilter(settings),"-an","-pix_fmt","yuv444p","-f","yuv4mpegpipe","pipe:1"))!;
+        var decodeError=decoder.StandardError.ReadToEndAsync();
+        Process? encoder=null;Task? pumping=null;
+        try
+        {
+            // Read just the Y4M header (no StreamReader read-ahead into binary frames). Explicit
+            // dimensions prevent gifski's default size limit from shrinking or stretching the GIF.
+            var header=new List<byte>();byte[] one=new byte[1];
+            while(header.Count<4096)
+            {
+                if(await decoder.StandardOutput.BaseStream.ReadAsync(one,timeout.Token).ConfigureAwait(false)==0) throw new IOException("FFmpeg 未输出 GIF 原始帧："+await decodeError.ConfigureAwait(false));
+                header.Add(one[0]);if(one[0]==10) break;
+            }
+            string text=Encoding.ASCII.GetString(header.ToArray());
+            var dimensions=Regex.Match(text,@"^YUV4MPEG2 W(\d+) H(\d+) ");
+            if(!dimensions.Success||header[^1]!=10) throw new IOException("FFmpeg 输出的 GIF 原始帧格式无效。");
+            int width=int.Parse(dimensions.Groups[1].Value,CultureInfo.InvariantCulture),height=int.Parse(dimensions.Groups[2].Value,CultureInfo.InvariantCulture);
+            encoder=Process.Start(Tools.Info(gifski,GifskiArguments(output,width,height,settings)))!;
+            var encodeError=encoder.StandardError.ReadToEndAsync();var encodeOutput=encoder.StandardOutput.ReadToEndAsync();
+            var sink=encoder;
+            pumping=Task.Run(async()=>
+            {
+                try
+                {
+                    await sink.StandardInput.BaseStream.WriteAsync(header.ToArray(),timeout.Token).ConfigureAwait(false);
+                    await decoder.StandardOutput.BaseStream.CopyToAsync(sink.StandardInput.BaseStream,65536,timeout.Token).ConfigureAwait(false);
+                }
+                catch {Kill(decoder);throw;}
+                finally {sink.StandardInput.Close();}
+            });
+            await Task.WhenAll(pumping,decoder.WaitForExitAsync(timeout.Token),encoder.WaitForExitAsync(timeout.Token)).ConfigureAwait(false);
+            await encodeOutput.ConfigureAwait(false);
+            string error=await encodeError.ConfigureAwait(false),decode=await decodeError.ConfigureAwait(false);
+            if(decoder.ExitCode!=0||encoder.ExitCode!=0) throw new IOException("GIF 保色压制失败："+(error+decode)[^Math.Min(error.Length+decode.Length,1800)..]);
+        }
+        catch
+        {
+            Kill(decoder);if(encoder!=null) Kill(encoder);
+            if(pumping!=null) {try {await pumping.ConfigureAwait(false);} catch { }}
+            throw;
+        }
+        finally {encoder?.Dispose();}
     }
+    static void Kill(Process process) {try {if(!process.HasExited) process.Kill(true);} catch(InvalidOperationException) { }}
 }
 
 sealed class GifRecorder
@@ -111,9 +157,9 @@ sealed class GifRecorder
                 if(active.ExitCode!=0) throw new IOException("GIF 捕获被中断："+diagnostic);
                 Directory.CreateDirectory(settings.SaveFolder);
                 var output=Path.Combine(settings.SaveFolder,$"GIF_{DateTime.Now:yyyyMMdd_HHmmss_fff}.gif");
-                var result=await GifExporter.Export(source!,output,settings).ConfigureAwait(false);
+                var result=await GifExporter.Export(source!,output,settings,text=>Message?.Invoke(text)).ConfigureAwait(false);
                 File.Delete(source!); Directory.Delete(Path.GetDirectoryName(source!)!);
-                Message?.Invoke($"GIF 已保存（{result.Bytes/1048576.0:0.##} MB）：{result.File}");
+                Message?.Invoke($"GIF 已保存（{result.Bytes/1048576.0:0.##} MB，压制 {result.EncodingSeconds:0.#} 秒）：{result.File}");
                 return result;
             }
             catch { Message?.Invoke("GIF 导出失败，原始画面保留在："+source); throw; }

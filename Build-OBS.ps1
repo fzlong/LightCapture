@@ -34,6 +34,11 @@ Get-ChildItem -LiteralPath $resolvedRuntime -Recurse -File -Filter '*.pdb' | For
 # OBS finds its helper executables beside the host executable. Keep the capture worker here.
 Get-ChildItem -LiteralPath $OutputFolder -File | Where-Object {$_.Extension -in @('.dll','.json') -or $_.Name -eq 'LightCapture.exe'} | Copy-Item -Destination $bin -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'tools\PresentMon.exe') -Destination (Join-Path $OutputFolder 'tools') -Force
+foreach($name in @('gifski.exe','gifski-LICENSE.txt')) {
+    $path=Join-Path $PSScriptRoot "tools\$name"
+    if(Test-Path -LiteralPath $path) {Copy-Item -LiteralPath $path -Destination (Join-Path $OutputFolder 'tools') -Force}
+    else {Write-Warning "$name missing; run Setup-Dependencies.ps1 for fast GIF encoding."}
+}
 if(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'third-party-notices')) {Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'third-party-notices') -Destination $OutputFolder -Recurse -Force}
 foreach($name in @('README.md','LICENSE')) {
     if(Test-Path -LiteralPath (Join-Path $PSScriptRoot $name)) {Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $OutputFolder -Force}

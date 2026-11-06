@@ -18,18 +18,37 @@ sealed class Settings
     public int GifFps { get; set; } = 15;
     public int GifMaxSide { get; set; } = 960;
     public int GifMaxSeconds { get; set; } = 60;
-    public string[] Hotkeys { get; set; } = ["Alt+Z","Alt+F9","Alt+Shift+F10","Alt+F10","Alt+F1","Alt+R","Alt+F2"];
+    public int GifQuality { get; set; } = 80;
+    public int HotkeySchemaVersion { get; set; } = 1;
+    public string[] Hotkeys { get; set; } = ["Alt+Z","Alt+4","Alt+Shift+F10","Alt+3","Alt+R","Alt+2"];
     public static readonly string DataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LightCapture");
     public static Settings Load()
     {
-        try { return Upgrade(JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path.Combine(DataFolder,"settings.json")))??new()); }
+        try { return FromJson(File.ReadAllText(Path.Combine(DataFolder,"settings.json"))); }
         catch { return new(); }
+    }
+    internal static Settings FromJson(string json)
+    {
+        var value=JsonSerializer.Deserialize<Settings>(json)??new();
+        using var document=JsonDocument.Parse(json);
+        if(!document.RootElement.TryGetProperty(nameof(HotkeySchemaVersion),out _)) value.HotkeySchemaVersion=0;
+        if(!document.RootElement.TryGetProperty(nameof(Hotkeys),out _)) value.Hotkeys=[];
+        return Upgrade(value);
     }
     internal static Settings Upgrade(Settings value)
     {
         var defaults=new Settings();
-        value.Hotkeys=Enumerable.Range(0,defaults.Hotkeys.Length).Select(i=>value.Hotkeys?.ElementAtOrDefault(i) is {Length:>0} saved?saved:defaults.Hotkeys[i]).ToArray();
+        if(value.HotkeySchemaVersion<1)
+        {
+            // Legacy layout had seven slots including a screenshot between replay save and FPS.
+            // Apply the requested recording/replay/GIF keys once, retaining custom menu/FPS keys.
+            string Key(int index,string fallback)=>value.Hotkeys?.ElementAtOrDefault(index) is {Length:>0} saved?saved:fallback;
+            value.Hotkeys=[Key(0,defaults.Hotkeys[0]),"Alt+4",Key(2,defaults.Hotkeys[2]),"Alt+3",Key(5,defaults.Hotkeys[4]),"Alt+2"];
+            value.HotkeySchemaVersion=1;
+        }
+        else value.Hotkeys=Enumerable.Range(0,defaults.Hotkeys.Length).Select(i=>value.Hotkeys?.ElementAtOrDefault(i) is {Length:>0} saved?saved:defaults.Hotkeys[i]).ToArray();
         value.GifFps=Math.Clamp(value.GifFps,8,30); value.GifMaxSide=Math.Clamp(value.GifMaxSide,320,1920); value.GifMaxSeconds=Math.Clamp(value.GifMaxSeconds,10,300);
+        value.GifQuality=Math.Clamp(value.GifQuality,50,100);
         return value;
     }
     public void Save() { Directory.CreateDirectory(DataFolder); File.WriteAllText(Path.Combine(DataFolder,"settings.json"),JsonSerializer.Serialize(this,new JsonSerializerOptions { WriteIndented=true })); }

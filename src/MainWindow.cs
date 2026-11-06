@@ -12,7 +12,7 @@ sealed class MainWindow : Form
     readonly NotifyIcon tray;
     readonly System.Windows.Forms.Timer timer=new() { Interval=1000 };
     readonly Label status=new() { AutoSize=false,Dock=DockStyle.Fill,Text="就绪",ForeColor=Color.DimGray,Padding=new Padding(8) };
-    readonly Button record=new(),replay=new(),saveReplay=new(),shot=new(),fpsButton=new(),menuButton=new(),gifButton=new();
+    readonly Button record=new(),replay=new(),saveReplay=new(),fpsButton=new(),menuButton=new(),gifButton=new();
     readonly List<TextBox> keyBoxes=new();
     readonly List<string> conflicts=new();
     readonly bool background;
@@ -21,10 +21,10 @@ sealed class MainWindow : Form
     Task? captureMaintenance;
     int fpsRequest;
     TextBox folder=null!;
-    NumericUpDown fpsInput=null!,secondsInput=null!,cacheInput=null!,displayInput=null!,qualityInput=null!,gifFps=null!,gifSize=null!,gifSeconds=null!;
+    NumericUpDown fpsInput=null!,secondsInput=null!,cacheInput=null!,displayInput=null!,qualityInput=null!,gifFps=null!,gifSize=null!,gifSeconds=null!,gifQuality=null!;
     ComboBox captureMethod=null!;
     CheckBox systemAudio=null!,minimized=null!,autoStart=null!,replayOnStart=null!;
-    readonly string[] names=["呼出 / 收起菜单","录制开始 / 停止","即时回放开关","保存最近回放","保存屏幕快照","FPS 显示开关","框选 GIF / 停止保存"];
+    readonly string[] names=["呼出 / 收起菜单","录制开始 / 停止","即时回放开关","保存最近回放","FPS 显示开关","框选 GIF / 停止保存"];
     public MainWindow(bool background)
     {
         this.background=background;
@@ -36,27 +36,27 @@ sealed class MainWindow : Form
         var home=new TabPage("录制菜单") { Padding=new Padding(18) };
         var prefs=new TabPage("设置与快捷键") { Padding=new Padding(16),AutoScroll=true };
         tabs.TabPages.AddRange([home,prefs]); Controls.Add(tabs);
-        var grid=new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=11 };
+        var grid=new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=10 };
         grid.ColumnStyles.Add(new(SizeType.Percent,100));
         grid.RowStyles.Add(new(SizeType.Absolute,68));
-        for(int i=1;i<=7;i++) grid.RowStyles.Add(new(SizeType.Absolute,60));
+        for(int i=1;i<=6;i++) grid.RowStyles.Add(new(SizeType.Absolute,60));
         grid.RowStyles.Add(new(SizeType.Absolute,48)); grid.RowStyles.Add(new(SizeType.Percent,100)); grid.RowStyles.Add(new(SizeType.Absolute,45));
         grid.Controls.Add(new Label { Text="LightCapture  /  轻录\nOBS 内核 · 游戏 / 桌面连续回放",AutoSize=false,Dock=DockStyle.Fill,Font=new(Font.FontFamily,13,FontStyle.Bold) },0,0);
-        Button[] buttons=[menuButton,record,replay,saveReplay,shot,fpsButton,gifButton];
+        Button[] buttons=[menuButton,record,replay,saveReplay,fpsButton,gifButton];
         for(int i=0;i<buttons.Length;i++)
         {
             int id=i; var b=buttons[i]; b.Dock=DockStyle.Fill; b.Margin=new Padding(0,4,0,4); b.TextAlign=ContentAlignment.MiddleLeft;
             b.FlatStyle=FlatStyle.System; b.Click+=async(_,_)=>await Act(id); grid.Controls.Add(b,0,i+1);
         }
         var open=new Button { Text="打开保存文件夹",Dock=DockStyle.Fill }; open.Click+=(_,_)=> { Directory.CreateDirectory(settings.SaveFolder); Process.Start(new ProcessStartInfo(settings.SaveFolder) { UseShellExecute=true }); };
-        grid.Controls.Add(open,0,8); grid.Controls.Add(status,0,9);
-        var hide=new Button { Text="收进托盘 · Alt+Z 再次打开",Dock=DockStyle.Fill }; hide.Click+=(_,_)=>Hide(); grid.Controls.Add(hide,0,10); home.Controls.Add(grid);
+        grid.Controls.Add(open,0,7); grid.Controls.Add(status,0,8);
+        var hide=new Button { Text="收进托盘 · Alt+Z 再次打开",Dock=DockStyle.Fill }; hide.Click+=(_,_)=>Hide(); grid.Controls.Add(hide,0,9); home.Controls.Add(grid);
         BuildSettings(prefs);
         var context=new ContextMenuStrip();
         context.Items.Add("打开菜单",null,(_,_)=>ShowMenu());
         context.Items.Add("录制开始 / 停止",null,async(_,_)=>await Act(1));
         context.Items.Add("保存即时回放",null,async(_,_)=>await Act(3));
-        context.Items.Add("框选 GIF / 停止保存",null,async(_,_)=>await Act(6));
+        context.Items.Add("框选 GIF / 停止保存",null,async(_,_)=>await Act(5));
         context.Items.Add(new ToolStripSeparator()); context.Items.Add("退出",null,async(_,_)=>await Exit());
         tray=new NotifyIcon { Icon=appIcon,Text="LightCapture · 轻录",Visible=true,ContextMenuStrip=context };
         tray.DoubleClick+=(_,_)=>ShowMenu();
@@ -121,6 +121,7 @@ sealed class MainWindow : Form
         gifFps=Number(settings.GifFps,8,30); Add("GIF 帧率",gifFps);
         gifSize=Number(settings.GifMaxSide,320,1920); Add("GIF 最长边（像素）",gifSize);
         gifSeconds=Number(settings.GifMaxSeconds,10,300); Add("GIF 最长录制（秒）",gifSeconds);
+        gifQuality=Number(settings.GifQuality,50,100); Add("GIF 质量（50–100）",gifQuality);
         for(int i=0;i<names.Length;i++) { var t=new TextBox { Text=settings.Hotkeys.ElementAtOrDefault(i)??new Settings().Hotkeys[i] }; keyBoxes.Add(t); Add(names[i],t); }
         var save=new Button { Text="保存设置并重新注册快捷键" }; save.Click+=(_,_)=>SaveSettings(); Add("",save);
         var help=new Label { AutoSize=true,MaximumSize=new Size(450,0),Text="录制选定显示器的全部内容：游戏、桌面、切换过程都进入同一份回放，切回桌面不会清空缓存。\n快捷键冲突时，请关闭 NVIDIA Overlay 或修改按键。FPS 首次开启需管理员授权；独占全屏可能遮挡 FPS 浮窗。\nOBS 以关键帧保留回放，达到内存上限时保留较新的画面；缓存显示为估算值。" };
@@ -137,7 +138,7 @@ sealed class MainWindow : Form
             settings.SaveFolder=path; settings.Fps=(int)fpsInput.Value; settings.ReplaySeconds=(int)secondsInput.Value; settings.CacheMegabytes=(int)cacheInput.Value;
             settings.DisplayIndex=(int)displayInput.Value; settings.CaptureMethod=captureMethod.SelectedIndex; settings.Quality=(int)qualityInput.Value; settings.SystemAudio=systemAudio.Checked;
             settings.StartMinimized=minimized.Checked; settings.ReplayOnLaunch=replayOnStart.Checked; settings.Hotkeys=keys;
-            settings.GifFps=(int)gifFps.Value; settings.GifMaxSide=(int)gifSize.Value; settings.GifMaxSeconds=(int)gifSeconds.Value;
+            settings.GifFps=(int)gifFps.Value; settings.GifMaxSide=(int)gifSize.Value; settings.GifMaxSeconds=(int)gifSeconds.Value; settings.GifQuality=(int)gifQuality.Value;
             settings.Save(); RegisterKeys(); RefreshState(); Notify(conflicts.Count==0?"设置已保存":"设置已保存，但存在快捷键冲突："+string.Join("、",conflicts));
         }
         catch(Exception ex) { Notify(ex.Message); }
@@ -161,9 +162,9 @@ sealed class MainWindow : Form
     void RegisterKeys()
     {
         conflicts.Clear();
+        for(int id=1;id<=7;id++) Native.UnregisterHotKey(Handle,id);
         for(int i=0;i<names.Length;i++)
         {
-            Native.UnregisterHotKey(Handle,i+1);
             try { var key=Native.Parse(settings.Hotkeys[i]); if(!Native.RegisterHotKey(Handle,i+1,key.Mods,key.Key)) conflicts.Add(settings.Hotkeys[i]); }
             catch(Exception ex) { conflicts.Add(ex.Message); }
         }
@@ -179,8 +180,8 @@ sealed class MainWindow : Form
     public async Task Act(int id)
     {
         if(id==0) { if(Visible) Hide(); else ShowMenu(); return; }
-        if(id==5) { await ToggleFps(); return; }
-        if(id==6) { await ToggleGif(); return; }
+        if(id==4) { await ToggleFps(); return; }
+        if(id==5) { await ToggleGif(); return; }
         if(busy) {Notify("正在处理录制或保存请求，请稍候。");return;} busy=true;
         try
         {
@@ -190,7 +191,6 @@ sealed class MainWindow : Form
                 case 1: await engine.ToggleRecording(); break;
                 case 2: await engine.ToggleReplay(); Notify(engine.Replay?engine.Recovering?"即时回放已请求开启，正在恢复显示器捕获":"即时回放已开启，游戏和桌面连续缓存在内存":"即时回放已关闭"); break;
                 case 3: await engine.SaveReplay(); break;
-                case 4: await engine.Screenshot(); break;
             }
             RefreshState();
         }
@@ -220,7 +220,7 @@ sealed class MainWindow : Form
                 if(region==null) { if(wasVisible && !busy && !IsDisposed) ShowMenu(); return; }
                 await Task.Delay(180); // Allow the selection surface to leave the compositor.
                 await gif.Start(region.Value);
-                Notify($"GIF 录制中：{region.Value.Width} × {region.Value.Height}，再次按 {settings.Hotkeys[6]} 停止；最长 {settings.GifMaxSeconds} 秒。");
+                Notify($"GIF 录制中：{region.Value.Width} × {region.Value.Height}，再次按 {settings.Hotkeys[5]} 停止；最长 {settings.GifMaxSeconds} 秒。");
             }
         }
         catch(Exception ex) { Notify(ex.Message); }
@@ -251,10 +251,10 @@ sealed class MainWindow : Form
     void RefreshState()
     {
         string gifText=gif.Exporting?"GIF · 正在压缩保存":gif.Recording?$"● GIF 录制中 {gif.Elapsed:mm\\:ss} · 点击停止":"GIF · 框选区域录制";
-        string[] info=["呼出 / 收起菜单",engine.Recording?engine.Recovering?"录制 · 捕获恢复中":"● 正在录制 · 点击停止":"录制 · 开始",engine.Replay?engine.Recovering?"即时回放 · 捕获恢复中":$"即时回放 · 已开启  {engine.CacheSeconds:0}s / {engine.CacheBytes/1048576.0:0} MB":"即时回放 · 已关闭","保存最近 "+settings.ReplaySeconds+" 秒回放","屏幕快照 · 保存 PNG",fpsStarting?"FPS 显示 · 启动中（再次点击取消）":overlay.Visible?"FPS 显示 · 已开启":"FPS 显示 · 已关闭",gifText];
-        Button[] buttons=[menuButton,record,replay,saveReplay,shot,fpsButton,gifButton];
+        string[] info=["呼出 / 收起菜单",engine.Recording?engine.Recovering?"录制 · 捕获恢复中":"● 正在录制 · 点击停止":"录制 · 开始",engine.Replay?engine.Recovering?"即时回放 · 捕获恢复中":$"即时回放 · 已开启  {engine.CacheSeconds:0}s / {engine.CacheBytes/1048576.0:0} MB":"即时回放 · 已关闭","保存最近 "+settings.ReplaySeconds+" 秒回放",fpsStarting?"FPS 显示 · 启动中（再次点击取消）":overlay.Visible?"FPS 显示 · 已开启":"FPS 显示 · 已关闭",gifText];
+        Button[] buttons=[menuButton,record,replay,saveReplay,fpsButton,gifButton];
         for(int i=0;i<names.Length;i++) buttons[i].Text=$"  {info[i]}\n  {settings.Hotkeys.ElementAtOrDefault(i)}";
-        tray.Text=engine.Recovering?"LightCapture · 正在恢复捕获":gif.Recording?"LightCapture · GIF 录制中，Alt+F2 停止":gif.Exporting?"LightCapture · GIF 压缩中":engine.Recording?"LightCapture · 正在录制":engine.Replay?"LightCapture · 内存回放中":"LightCapture · 就绪";
+        tray.Text=engine.Recovering?"LightCapture · 正在恢复捕获":gif.Recording?$"LightCapture · GIF 录制中，{settings.Hotkeys[5]} 停止":gif.Exporting?"LightCapture · GIF 压缩中":engine.Recording?"LightCapture · 正在录制":engine.Replay?"LightCapture · 内存回放中":"LightCapture · 就绪";
     }
     void Notify(string message)
     {

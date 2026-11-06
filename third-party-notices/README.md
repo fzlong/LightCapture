@@ -1,6 +1,6 @@
 # Third-party components
 
-LightCapture 0.3.1 builds against the official, unmodified OBS Studio 32.2.2 Windows x64 libraries and helper executables. The source repository does not include these binaries. The build script selects the required modules: libobs, Direct3D 11, Windows Graphics Capture support, Windows display capture, WASAPI, FFmpeg output/AAC and NVENC.
+LightCapture 0.3.2 builds against the official, unmodified OBS Studio 32.2.2 Windows x64 libraries and helper executables. The source repository does not include these binaries. The build script selects the required modules: libobs, Direct3D 11, Windows Graphics Capture support, Windows display capture, WASAPI, FFmpeg output/AAC and NVENC.
 
 - OBS Studio: https://github.com/obsproject/obs-studio/tree/32.2.2
 - Official binaries: https://github.com/obsproject/obs-studio/releases/tag/32.2.2
@@ -16,6 +16,7 @@ LightCapture 0.3.1 builds against the official, unmodified OBS Studio 32.2.2 Win
 - winpthreads: https://www.mingw-w64.org/
 - PresentMon 2.6.0: https://github.com/GameTechDev/PresentMon/tree/v2.6.0 (MIT).
 - NAudio 2.2.1: https://github.com/naudio/NAudio (MIT).
+- gifski 1.34.0: https://github.com/ImageOptim/gifski/tree/1.34.0 (AGPL-3.0-or-later). The official Windows executable runs separately over the standard YUV4MPEG pipe protocol; it is not linked into the LightCapture executable. Its full upstream LICENSE is copied into tools/gifski-LICENSE.txt alongside the binary by the dependency setup/build scripts. Corresponding source: https://github.com/ImageOptim/gifski/archive/refs/tags/1.34.0.tar.gz . Official multi-platform archive SHA256: B9B6591AA163123D737353D9C8581EFDF3234D28EEAA45329B31DA905CD5A996.
 
 An independently installed FFmpeg executable is used for screenshots, GIF export and recording remux. It is not copied into the package. Its licensing depends on the installed build.
 

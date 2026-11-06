@@ -21,7 +21,11 @@ static class Native
                 case "ALT": mods|=1; break;
                 case "CTRL": case "CONTROL": mods|=2; break;
                 case "SHIFT": mods|=4; break;
-                default: if(!Enum.TryParse(part,true,out key)||key==Keys.None||(uint)key>255) throw new ArgumentException("无效快捷键："+text); break;
+                default:
+                    // Enum.TryParse("2") yields Keys.RButton (VK 0x02), not the '2' key (VK 0x32).
+                    if(part.Length==1 && part[0]>='0' && part[0]<='9') key=(Keys)(0x30+part[0]-'0');
+                    else if(part.All(char.IsDigit)||!Enum.TryParse(part,true,out key)||key==Keys.None||(uint)key>255) throw new ArgumentException("无效快捷键："+text);
+                    break;
             }
         }
         if(key==Keys.None||mods==0) throw new ArgumentException("快捷键需要修饰键加一个按键。");
